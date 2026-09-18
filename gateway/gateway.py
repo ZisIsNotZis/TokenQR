@@ -2,7 +2,7 @@
 """Lightweight TokenQR Gateway POC. Configure upstream with TOKENQR_UPSTREAM_URL and TOKENQR_UPSTREAM_TOKEN."""
 from http.server import BaseHTTPRequestHandler,HTTPServer
 import os,json,time,uuid,hashlib,threading,urllib.request
-DATA=os.environ.get('TOKENQR_DATA','gateway-state.json'); UP=os.environ.get('TOKENQR_UPSTREAM_URL','https://api.openai.com/v1').rstrip('/'); ROOT=os.environ.get('TOKENQR_UPSTREAM_TOKEN',''); ADMIN=os.environ.get('TOKENQR_ADMIN_TOKEN','change-me'); lock=threading.Lock()
+DATA=os.environ.get('TOKENQR_DATA','gateway-state.json'); UP=os.environ.get('TOKENQR_UPSTREAM_URL','https://api.openai.com/v1').rstrip('/'); ROOT=os.environ.get('TOKENQR_UPSTREAM_TOKEN',''); ADMIN=os.environ.get('TOKENQR_ADMIN_TOKEN','change-me'); PUBLIC=os.environ.get('TOKENQR_PUBLIC_URL','http://localhost:8787'); lock=threading.Lock()
 def load():
  try:return json.load(open(DATA))
  except:return {'credentials':{},'usage':{}}
@@ -35,7 +35,7 @@ class H(BaseHTTPRequestHandler):
    if self.auth()!=ROOT:return self.send(401,{'error':'provider_token_invalid'})
    q=self.body(); plain=token(); cid='cred_'+uuid.uuid4().hex[:12]; now=int(time.time()); exp=q.get('expires_at');
    with lock: state['credentials'][cid]={'hash':hashlib.sha256(plain.encode()).hexdigest(),'name':q.get('name','Unnamed'),'purpose':q.get('purpose',''),'models':q.get('models',[]),'limits':q.get('limits',{}),'created_at':now,'expires_at':exp,'status':'active'};save(state)
-   return self.send(201,{'credential_id':cid,'token':plain,'base_url':'/v1','expires_at':exp})
+   return self.send(201,{'credential_id':cid,'token':plain,'base_url':PUBLIC+'/v1','expires_at':exp})
   if self.path=='/tokenqr/revoke':
    c=self.cred();
    if not c:return self.send(401,{'error':'invalid_token'})
@@ -46,6 +46,8 @@ class H(BaseHTTPRequestHandler):
   for c in state['credentials'].values():
    if c['hash']==h:return c
  def do_GET(self):
+  if self.path=='/admin':
+   html='''<!doctype html><meta charset=utf-8><title>TokenQR Gateway Admin</title><style>body{font:16px system-ui;max-width:900px;margin:2rem auto}input,button{padding:.6rem;margin:.3rem}pre{white-space:pre-wrap;background:#eee;padding:1rem}</style><h1>TokenQR Gateway</h1><input id=t type=password placeholder="Admin Token"><button onclick="load()">登录</button><pre id=o></pre><script>async function load(){let r=await fetch('/tokenqr/admin/usage',{headers:{Authorization:'Bearer '+t.value}});o.textContent=JSON.stringify(await r.json(),null,2)}</script>'''; self.send_response(200);self.send_header('Content-Type','text/html');self.send_header('Access-Control-Allow-Origin','*');self.end_headers();self.wfile.write(html.encode());return
   if self.path=='/tokenqr/usage':
    c=self.cred();return self.send(200,{'credential':c,'usage':c and state['usage'].get(c['hash'],{'requests':0,'total_tokens':0})}) if c else self.send(401,{'error':'invalid_token'})
   if self.path=='/tokenqr/admin/usage':
