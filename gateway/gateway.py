@@ -17,7 +17,7 @@ class H(BaseHTTPRequestHandler):
  def auth(self):return self.headers.get('Authorization','').removeprefix('Bearer ').strip()
  def do_OPTIONS(self):self.send(204,{})
  def do_POST(self):
-  if self.path in ('/v1/chat/completions','/v1/responses'):
+  if self.path in ('/v1/chat/completions','/v1/responses','/v1/messages'):
    c=self.cred()
    if not c or c.get('status')!='active': return self.send(401,{'error':'invalid_token'})
    if c.get('expires_at') and str(c['expires_at']) < str(time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())): c['status']='expired'; save(state); return self.send(401,{'error':'expired'})
@@ -26,12 +26,25 @@ class H(BaseHTTPRequestHandler):
    usage=state['usage'].setdefault(c['hash'],{'requests':0,'total_tokens':0}); lim=c.get('limits',{})
    if lim.get('rpm') and usage.get('minute',0)>=lim['rpm']:return self.send(429,{'error':'rpm_limit'})
    if lim.get('token_budget') and usage['total_tokens']>=lim['token_budget']:return self.send(429,{'error':'token_budget_exhausted'})
-   route='/responses' if self.path.endswith('/responses') else '/chat/completions'
-   req=urllib.request.Request(UP+route,data=json.dumps(q).encode(),headers={'Content-Type':'application/json','Authorization':'Bearer '+ROOT})
+   route='/responses' if self.path.endswith('/responses') else ('/messages' if self.path.endswith('/messages') else '/chat/completions')
+   headers={'Content-Type':'application/json'}
+   if route=='/messages': headers.update({'x-api-key':ROOT,'anthropic-version':'2023-06-01'})
+   else: headers['Authorization']='Bearer '+ROOT
+   req=urllib.request.Request(UP+route,data=json.dumps(q).encode(),headers=headers)
    try:
-    with urllib.request.urlopen(req,timeout=120) as r: out=json.loads(r.read())
+    with urllib.request.urlopen(req,timeout=120) as r:
+     if q.get('stream'):
+      self.send_response(r.status);self.send_header('Content-Type',r.headers.get('Content-Type','text/event-stream'));self.send_header('Access-Control-Allow-Origin','*');self.end_headers()
+      while True:
+       chunk=r.read(4096)
+       if not chunk:break
+       self.wfile.write(chunk);self.wfile.flush()
+      out={}
+     else: out=json.loads(r.read())
    except Exception as e:return self.send(502,{'error':'upstream_error','detail':str(e)})
-   u=out.get('usage',{}); n=int(u.get('total_tokens',0)); usage['requests']+=1;usage['total_tokens']+=n;usage['minute']=usage.get('minute',0)+1;save(state);return self.send(200,out)
+   u=out.get('usage',{}) if out else {}; n=int(u.get('total_tokens',u.get('input_tokens',0)+u.get('output_tokens',0))); usage['requests']+=1;usage['total_tokens']+=n;usage['minute']=usage.get('minute',0)+1;save(state)
+   if q.get('stream'): return
+   return self.send(200,out)
   if self.path=='/tokenqr/credentials':
    if self.auth()!=ROOT:return self.send(401,{'error':'provider_token_invalid'})
    q=self.body(); plain=token(); cid='cred_'+uuid.uuid4().hex[:12]; now=int(time.time()); exp=q.get('expires_at');
