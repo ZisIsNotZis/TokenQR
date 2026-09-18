@@ -33,7 +33,7 @@ TokenQR 把这件事变成一个可解释的授权动作：
 
 ## 当前 POC
 
-当前实现是一个单文件网页 `tokenqr.html`，包含：
+当前实现是一个单文件网页 `tokenqr.html`，另有无需 Relay 的反向授权页面 `reverse.html`。`tokenqr.html` 包含：
 
 - 电脑端和 Provider 端两个 Tab；
 - 多 Provider 本地配置；
@@ -43,6 +43,7 @@ TokenQR 把这件事变成一个可解释的授权动作：
 - 授权确认界面；
 - 有效期、模型、限流和限量的策略展示；
 - 本地 Python Relay；
+- `reverse.html`：Provider 先用用户可记忆的长密码加密配置并生成二维码，接收方扫描后本地解密，不需要 Relay；
 - 授权成功后的极简 OpenAI-compatible 聊天界面。
 
 ## 快速开始
