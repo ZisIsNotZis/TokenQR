@@ -17,6 +17,20 @@ class H(BaseHTTPRequestHandler):
  def auth(self):return self.headers.get('Authorization','').removeprefix('Bearer ').strip()
  def do_OPTIONS(self):self.send(204,{})
  def do_POST(self):
+  if self.path=='/v1/chat/completions':
+   c=self.cred()
+   if not c or c.get('status')!='active': return self.send(401,{'error':'invalid_token'})
+   if c.get('expires_at') and str(c['expires_at']) < str(time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())): c['status']='expired'; save(state); return self.send(401,{'error':'expired'})
+   q=self.body(); model=q.get('model'); allowed=c.get('models') or []
+   if allowed and model not in allowed:return self.send(403,{'error':'model_not_allowed','allowed_models':allowed})
+   usage=state['usage'].setdefault(c['hash'],{'requests':0,'total_tokens':0}); lim=c.get('limits',{})
+   if lim.get('rpm') and usage.get('minute',0)>=lim['rpm']:return self.send(429,{'error':'rpm_limit'})
+   if lim.get('token_budget') and usage['total_tokens']>=lim['token_budget']:return self.send(429,{'error':'token_budget_exhausted'})
+   req=urllib.request.Request(UP+'/chat/completions',data=json.dumps(q).encode(),headers={'Content-Type':'application/json','Authorization':'Bearer '+ROOT})
+   try:
+    with urllib.request.urlopen(req,timeout=120) as r: out=json.loads(r.read())
+   except Exception as e:return self.send(502,{'error':'upstream_error','detail':str(e)})
+   u=out.get('usage',{}); n=int(u.get('total_tokens',0)); usage['requests']+=1;usage['total_tokens']+=n;usage['minute']=usage.get('minute',0)+1;save(state);return self.send(200,out)
   if self.path=='/tokenqr/credentials':
    if self.auth()!=ROOT:return self.send(401,{'error':'provider_token_invalid'})
    q=self.body(); plain=token(); cid='cred_'+uuid.uuid4().hex[:12]; now=int(time.time()); exp=q.get('expires_at');
