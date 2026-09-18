@@ -17,7 +17,7 @@ class H(BaseHTTPRequestHandler):
  def auth(self):return self.headers.get('Authorization','').removeprefix('Bearer ').strip()
  def do_OPTIONS(self):self.send(204,{})
  def do_POST(self):
-  if self.path=='/v1/chat/completions':
+  if self.path in ('/v1/chat/completions','/v1/responses'):
    c=self.cred()
    if not c or c.get('status')!='active': return self.send(401,{'error':'invalid_token'})
    if c.get('expires_at') and str(c['expires_at']) < str(time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())): c['status']='expired'; save(state); return self.send(401,{'error':'expired'})
@@ -26,7 +26,8 @@ class H(BaseHTTPRequestHandler):
    usage=state['usage'].setdefault(c['hash'],{'requests':0,'total_tokens':0}); lim=c.get('limits',{})
    if lim.get('rpm') and usage.get('minute',0)>=lim['rpm']:return self.send(429,{'error':'rpm_limit'})
    if lim.get('token_budget') and usage['total_tokens']>=lim['token_budget']:return self.send(429,{'error':'token_budget_exhausted'})
-   req=urllib.request.Request(UP+'/chat/completions',data=json.dumps(q).encode(),headers={'Content-Type':'application/json','Authorization':'Bearer '+ROOT})
+   route='/responses' if self.path.endswith('/responses') else '/chat/completions'
+   req=urllib.request.Request(UP+route,data=json.dumps(q).encode(),headers={'Content-Type':'application/json','Authorization':'Bearer '+ROOT})
    try:
     with urllib.request.urlopen(req,timeout=120) as r: out=json.loads(r.read())
    except Exception as e:return self.send(502,{'error':'upstream_error','detail':str(e)})
@@ -46,6 +47,11 @@ class H(BaseHTTPRequestHandler):
   for c in state['credentials'].values():
    if c['hash']==h:return c
  def do_GET(self):
+  if self.path=='/v1/models':
+   req=urllib.request.Request(UP+'/models',headers={'Authorization':'Bearer '+ROOT})
+   try:
+    with urllib.request.urlopen(req,timeout=30) as r:return self.send(200,json.loads(r.read()))
+   except Exception as e:return self.send(502,{'error':'upstream_error','detail':str(e)})
   if self.path=='/admin':
    html='''<!doctype html><meta charset=utf-8><title>TokenQR Gateway Admin</title><style>body{font:16px system-ui;max-width:900px;margin:2rem auto}input,button{padding:.6rem;margin:.3rem}pre{white-space:pre-wrap;background:#eee;padding:1rem}</style><h1>TokenQR Gateway</h1><input id=t type=password placeholder="Admin Token"><button onclick="load()">登录</button><pre id=o></pre><script>async function load(){let r=await fetch('/tokenqr/admin/usage',{headers:{Authorization:'Bearer '+t.value}});o.textContent=JSON.stringify(await r.json(),null,2)}</script>'''; self.send_response(200);self.send_header('Content-Type','text/html');self.send_header('Access-Control-Allow-Origin','*');self.end_headers();self.wfile.write(html.encode());return
   if self.path=='/tokenqr/usage':
@@ -58,4 +64,4 @@ class H(BaseHTTPRequestHandler):
  def do_DELETE(self):
   self.send(405,{'error':'use_post_revoke'})
  def log_message(self,*a):pass
-HTTPServer(('0.0.0.0',8787),H).serve_forever()
+print('TokenQR Gateway listening on http://0.0.0.0:8787',flush=True); print('Upstream:',UP,flush=True); HTTPServer(('0.0.0.0',8787),H).serve_forever()
