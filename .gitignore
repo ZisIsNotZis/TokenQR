@@ -1,3 +1,20 @@
 node_modules/
 .DS_Store
 *.log
+gateway-state.json
+
+# Common local caches and temporary workspaces
+__pycache__/
+.pi/
+.tmp/
+worktrees/
+.worktrees/
+
+# Local secrets, test caches, and generated logs
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.cache/
+.env
+.env.*
+!.env.example
