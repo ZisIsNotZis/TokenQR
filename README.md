@@ -1,5 +1,10 @@
 # TokenQR
 
+> **Status: closed (POC, 2026-09-29).** The protocol proof-of-concept is complete;
+> the unchecked roadmap items below are optional future extensions, not required
+> for the POC. No further development is planned unless the project's inputs or
+> goals change.
+
 > **不要再复制粘贴 Token。扫描、确认、授权。**
 
 TokenQR 是一个开放的、客户端优先的 Token 授权协议：电脑上的 AI 应用显示一个一次性二维码，用户在自己的 Provider 页面中确认授权，Token 使用电脑端临时公钥加密后经 Relay 传递，只有发起授权的应用能够解密。
@@ -83,6 +88,8 @@ TokenQR 解决传输链路和授权交互中的复制粘贴泄露问题，不保
 不要在公开环境使用长期生产 Token。详见 [SECURITY.md](SECURITY.md) 和 [协议草案](docs/protocol.md)。
 
 ## 路线图
+
+POC 已闭环；下列未打勾项为可选未来扩展，不影响 POC 完成度：
 
 - [x] 单文件网页 POC
 - [x] 多 Provider 配置
