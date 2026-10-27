@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="40" viewBox="0 0 200 40" role="img" aria-label="TokenQR">
+  <g fill="currentColor">
+    <!-- QR scan frame with a keyhole in the middle: a token you scan, not copy -->
+    <path d="M4 14V8a4 4 0 0 1 4-4h6v3H8a1 1 0 0 0-1 1v6zm14-10h6a4 4 0 0 1 4 4v6h-3V8a1 1 0 0 0-1-1h-6zM4 22v6a4 4 0 0 0 4 4h6v-3H8a1 1 0 0 1-1-1v-6zm24 0h3v6a4 4 0 0 1-4 4h-6v-3h6a1 1 0 0 0 1-1z"/>
+    <path d="M20 11.5a5.5 5.5 0 0 0-2 10.62V27h4v-4.88A5.5 5.5 0 0 0 20 11.5zm0 3a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5z"/>
+  </g>
+  <text x="48" y="27" font-family="system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="22" font-weight="700" letter-spacing="0.2" fill="currentColor">Token<tspan font-weight="400">QR</tspan></text>
+</svg>
