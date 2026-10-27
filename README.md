@@ -1,109 +1,139 @@
+**English** | [简体中文](README.zh-CN.md)
+
+<img src="assets/logo.svg" alt="TokenQR" width="200" height="40">
+
 # TokenQR
 
-> **Status: closed (POC, 2026-09-29).** The protocol proof-of-concept is complete;
-> the unchecked roadmap items below are optional future extensions, not required
-> for the POC. No further development is planned unless the project's inputs or
-> goals change.
+An open, client-first protocol for handing an AI provider token from the user's browser to a local app — by scanning a QR code instead of copy-pasting a secret.
 
-> **不要再复制粘贴 Token。扫描、确认、授权。**
+**TokenQR turns "copy this API key into that app" into a one-time, end-to-end-encrypted authorization the user can see, understand, and limit.**
 
-TokenQR 是一个开放的、客户端优先的 Token 授权协议：电脑上的 AI 应用显示一个一次性二维码，用户在自己的 Provider 页面中确认授权，Token 使用电脑端临时公钥加密后经 Relay 传递，只有发起授权的应用能够解密。
+> **Status: POC closed (2026-09-29).** The minimal authorization loop is implemented and demonstrable. Open roadmap items are optional extensions, not part of the POC. No further development is planned unless the project's inputs or goals change.
 
-本仓库的网页只是一个 POC。更重要的是协议本身：任何应用、Provider、Relay 或 Gateway 都可以实现它，而不必把用户锁定在某个云服务里。
+![TokenQR flow: the AI app shows a QR code, the relay forwards ciphertext, the provider confirms and encrypts the token](docs/screenshots/flow.svg)
 
-![TokenQR flow](docs/screenshots/flow.svg)
+## Why it exists
 
-## 为什么需要 TokenQR？
+Getting a token into an AI app still means copying a secret out of a provider console, pasting it through clipboards, chat apps and screenshots, and hoping nobody sees it. The user also has no clear answer to "which app is using my token, for what, and for how long?"
 
-AI 应用越来越多，但 Token 的供应方式仍然停留在复制粘贴：从 Provider 控制台复制 Secret，经过剪贴板、聊天软件、截图或手工配置，再粘贴进另一个应用。这个过程既不安全，也不便于用户理解“哪个应用正在使用我的 Token”。
+TokenQR makes that an explicit authorization action:
 
-TokenQR 把这件事变成一个可解释的授权动作：
+1. the app says who it is and why it needs a token;
+2. the user picks a credential and models on their own provider page;
+3. the user confirms the validity period and the policy intent;
+4. the token is encrypted to the requesting app's ephemeral public key;
+5. the relay only forwards ciphertext — it never sees the token.
 
-1. 应用说明自己是谁、为什么需要 Token；
-2. 用户在自己的 Provider 页面选择凭据和模型；
-3. 用户确认授权期限以及策略意图；
-4. Token 端到端加密传给请求方；
-5. Relay 只负责转发，不需要理解或保存 Token。
+It is not another token cloud and it does not lock anyone into one vendor. It is an open authorization channel that local apps, open-source tools, desktop software and optional gateways can share.
 
-这不是另一个 Token 云服务，也不是强迫所有人使用同一个供应商。它是一条开放的“Token 授权管道”，让本地应用、开源工具、桌面软件和未来的 Gateway 可以共享一种简单的交互协议。
+## What it can do now
 
-## 协议哲学
+- **Two-sided POC UI** (`tokenqr.html`): a *computer app* tab that requests a token and a *provider* tab that authorizes it.
+- **Multiple provider profiles** kept in the browser's `localStorage`, with `/models` auto-fetch and manual fallback.
+- **One-time QR codes** generated in the browser and scanned with any camera supported by `BarcodeDetector` (or pasted as text).
+- **End-to-end encryption**: P-256 ECDH key agreement with AES-256-GCM; the QR contains only the relay endpoint, the ephemeral public key, app metadata and an expiry.
+- **Explicit consent screen**: app name, reason, validity, authorized provider, allowed models and displayed rate/quota intent.
+- **Three API shapes** after authorization: OpenAI Chat Completions, OpenAI Responses, and Anthropic Messages; a minimal chat box sends a request with the authorized credential.
+- **Relay-free reverse mode** (`reverse.html`): the provider encrypts a config with a long memorable password (PBKDF2-SHA-256, 250k iterations, AES-256-GCM), shows a QR (`TQD1`), and the receiver decrypts it locally with the same password.
+- **Local relay** (`server.py`): a standard-library mailbox with `POST` / one-shot `GET` / `DELETE` on `/relay/<id>`, plus CORS.
+- **Optional gateway** (`gateway/gateway.py`): creates app-specific `tqr_live_…` credentials, enforces model allowlists, expiry, revocation, RPM and token budgets, proxies streaming responses, and exposes `/v1/models` plus an admin usage view.
 
-- **Provider 自主**：用户的 Token 留在自己的 Provider 配置中，授权对象由用户选择。
-- **客户端优先**：基础协议不要求注册账号、绑定银行卡或部署中心云服务。
-- **Relay 可替换**：公共 Relay、本地 Relay、企业 Relay 或自建服务都可以实现同一接口。
-- **端到端保密**：Relay 看不到授权 Token；二维码也不携带 Token。
-- **策略诚实表达**：限流、限量、模型白名单只有 Provider 或可选 Gateway 支持时才能强制执行，协议不伪装客户端约定。
-- **开放互操作**：MIT License，协议文档公开，任何人都可以实现兼容客户端或服务。
+## Quick start
 
-## 当前 POC
+You need Python 3 and a browser. Nothing to install for the POC.
 
-当前实现是一个单文件网页 `tokenqr.html`，另有无需 Relay 的反向授权页面 `reverse.html`。`tokenqr.html` 包含：
-
-- 电脑端和 Provider 端两个 Tab；
-- 多 Provider 本地配置；
-- `/models` 自动拉取及手动 fallback；
-- 二维码生成和摄像头扫描；
-- P-256 ECDH + HKDF + AES-GCM；
-- 授权确认界面；
-- 有效期、模型、限流和限量的策略展示；
-- 本地 Python Relay；
-- `reverse.html`：Provider 先用用户可记忆的长密码加密配置并生成二维码，接收方扫描后本地解密，不需要 Relay；
-- 授权成功后的极简 OpenAI-compatible 聊天界面。
-
-## 快速开始
-
-终端一：
+Terminal 1 — local relay:
 
 ```bash
 python3 server.py
 ```
 
-终端二：
+Terminal 2 — static pages:
 
 ```bash
 python3 -m http.server 8080
 ```
 
-浏览器打开：`http://localhost:8080/tokenqr.html`。打开两个 Tab：一个选择“电脑端应用”，另一个选择“Provider 手机端”。Provider 配置保存在当前浏览器的 Local Storage 中。
+Open <http://localhost:8080/tokenqr.html>. Use the **computer app** tab to generate a QR code, then the **provider** tab to scan or paste it, choose a configured provider, and confirm. The relay listens on `http://localhost:8765/relay` by default; the field in the UI is editable.
 
-本地 Relay 默认地址：
+For the relay-free flow, open <http://localhost:8080/reverse.html>, enter a provider config as JSON in the provider tab, set a long password, and scan the resulting QR in the receiver tab.
+
+## Architecture
+
+Three small pieces, no framework and no build step:
 
 ```text
-http://localhost:8765/relay
+tokenqr.html        single-page POC: computer app + provider tabs, QR, WebCrypto
+reverse.html        relay-free reverse authorization (password-encrypted QR)
+server.py           local relay: one-shot message mailbox on :8765
+gateway/
+  gateway.py        optional policy-enforcing proxy on :8787
+  README.md         gateway boundary and LiteLLM direction
+vendor/qrcode.js    prebuilt QR encoder used by both pages
+docs/
+  protocol.md       QR payload, encrypted payload, relay contract, policy semantics
+  project-status.md status and evidence
 ```
 
-## Relay 为什么不直接绑定某一家？
+The flow: the computer app generates an ephemeral P-256 key pair and a random relay endpoint, and puts the public key and metadata into a `TQR1` QR payload. The provider scans it, encrypts the chosen credential to that public key, and `POST`s the ciphertext to the relay endpoint. The computer app polls the same endpoint once, receives the ciphertext, decrypts it locally, and can then call the provider API directly. The relay holds one opaque message and forgets it after the read.
 
-Relay 只需要提供一次性消息邮箱。公共服务经常有 CORS、匿名额度、保留时间或 API 变更问题，因此 TokenQR 把 Relay 做成可替换 Adapter。POC 使用标准库 Python Server，生产环境可以替换成任意支持 HTTPS、CORS、随机 endpoint 和一次性消费的实现。
+The optional gateway sits between the app and the upstream provider. Instead of handing over the provider's root token, the provider page asks the gateway for a scoped credential; the gateway stores only its hash and enforces the allowlist, expiry and limits on every request.
 
-## 可选 Gateway
+## Development
 
-基础模式直接把 Provider Token 交给本地应用，这是协议的最小闭环。未来可以使用 LiteLLM 等成熟 Gateway，把 TokenQR 授权转换成 Gateway Key，从而获得强制模型限制、RPM/TPM、预算和撤销能力。Gateway 是可选扩展，不是基础协议依赖。
+The pages are self-contained HTML with inline JavaScript; `vendor/qrcode.js` is a prebuilt browser bundle and does not need rebuilding to run the POC.
 
-## 安全边界
+```bash
+# optional: dependencies used to regenerate the QR vendor bundle
+npm install
 
-TokenQR 解决传输链路和授权交互中的复制粘贴泄露问题，不保护已经被攻破的电脑、恶意浏览器扩展或已经获得解密后 Token 的应用。Provider 是否真正撤销或过期，仍由 Provider 自己决定。
+# syntax-check the Python services
+python3 -m py_compile server.py gateway/gateway.py
+```
 
-不要在公开环境使用长期生产 Token。详见 [SECURITY.md](SECURITY.md) 和 [协议草案](docs/protocol.md)。
+There is no test suite or linter configured. Check a change by loading both pages and running the full loop against the local relay; additionally run `git diff --check` and the `node --check` syntax check on any inline script you edit.
 
-## 路线图
+To run the optional gateway:
 
-POC 已闭环；下列未打勾项为可选未来扩展，不影响 POC 完成度：
+```bash
+TOKENQR_UPSTREAM_URL=https://api.openai.com/v1 \
+TOKENQR_UPSTREAM_TOKEN=sk-... \
+TOKENQR_ADMIN_TOKEN=... \
+python3 gateway/gateway.py
+```
 
-- [x] 单文件网页 POC
-- [x] 多 Provider 配置
-- [x] 本地 Relay
-- [x] 端到端加密授权
-- [ ] 公共 Relay Adapter
-- [ ] Provider 模型列表缓存和编辑
-- [ ] LiteLLM 等 Gateway 适配
-- [ ] 独立协议实现和互操作测试
+It listens on `http://localhost:8787` by default (`TOKENQR_PUBLIC_URL` sets the base URL it hands back, `TOKENQR_DATA` the state file, ignored by git). Configure it in the provider page's optional Gateway field, then choose **Create restricted token** instead of sending the raw token.
 
-## 参与协议建设
+## Security boundary
 
-欢迎提交 Issue、Relay Adapter、Provider 适配器和安全审查。请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。本项目采用 MIT License，目标是让 Token 授权成为所有 AI 应用都能使用的开放基础设施。
+TokenQR removes copy-paste and chat-app leakage from the authorization path. It does not protect a compromised computer, a malicious browser extension, a malicious provider page, or an app that already holds the decrypted token. Whether a provider actually revokes or expires a token remains the provider's decision, and rate/quota/model limits are intent unless a provider or gateway enforces them.
+
+Do not use long-lived production tokens in public demos. See [SECURITY.md](SECURITY.md) and the [protocol draft](docs/protocol.md).
+
+## Contributing
+
+Issues and pull requests are welcome — protocol clarity, relay adapters, provider adapters and security review especially. Read [CONTRIBUTING.md](CONTRIBUTING.md) first. The project is MIT-licensed and aims to make token authorization open infrastructure any AI app can use.
+
+## Roadmap
+
+Implemented:
+
+- [x] Single-page web POC with computer and provider tabs
+- [x] Multiple provider profiles and model selection
+- [x] Local relay with one-shot delivery
+- [x] End-to-end encrypted authorization (P-256 ECDH + AES-256-GCM)
+- [x] Relay-free reverse authorization (`TQD1`)
+- [x] Optional gateway with scoped credentials, limits and revocation
+
+Planned, optional:
+
+- [ ] Public relay adapter
+- [ ] Provider model-list cache and editing
+- [ ] LiteLLM-style gateway adapter
+- [ ] Independent protocol implementations and interoperability tests
+
+The longer-term vision is a small, well-specified authorization channel: any local app can ask, any provider page can grant, any relay can carry the ciphertext, and an optional gateway can turn the grant into enforceable limits. Everything beyond the closed POC loop is an extension, not a promise.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) © TokenQR contributors.
