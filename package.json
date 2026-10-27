@@ -1,12 +1,15 @@
 {
   "name": "tokenqr",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
+  "description": "Open, client-first token authorization protocol: one-time QR, end-to-end encryption, replaceable relay, optional policy gateway.",
+  "keywords": [
+    "token-authorization",
+    "qr-code",
+    "end-to-end-encryption",
+    "protocol",
+    "openai",
+    "llm"
+  ],
   "type": "commonjs",
   "dependencies": {
     "qrcode": "^1.5.4"
