@@ -4,6 +4,8 @@
 
 # TokenQR
 
+**项目状态 · 未完成（2026-11-26）**。仓内称最小授权 POC 已关闭；1440×1400 Chromium 中两个独立浏览器上下文跑通真实授权、密文中转及回环模拟上游对话。普通 1280×720 视口的授权确认按钮超出可点击区域。 确认授权弹层在普通桌面和窄屏都能完成全流程，限定到 POC。
+
 An open, client-first protocol for handing an AI provider token from the user's browser to a local app — by scanning a QR code instead of copy-pasting a secret.
 
 **TokenQR turns "copy this API key into that app" into a one-time, end-to-end-encrypted authorization the user can see, understand, and limit.**
