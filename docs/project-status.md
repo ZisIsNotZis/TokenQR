@@ -1,28 +1,17 @@
-# TokenQR project status
+# TokenQR 项目状态
 
-## Classification
+**最小授权 POC 已通过本地验收。** 基线为 `622b4d08`：在 1280×720 下，旧版批准和取消按钮落在视口外；390×844 下批准按钮也未完整显示。候选把请求内容放进可滚动的对话框主体，让两个决定按钮始终留在底部。
 
-Closed proof-of-concept: an open, client-first token-authorization protocol, plus
-a single-page web POC and a local Relay.
+## 验收范围和证据
 
-## Status
+在 Chromium 的 1280×720 与 390×844 视口，从 [`tokenqr.html`](../tokenqr.html) 的电脑端生成二维码，在独立 Provider 上下文粘贴二维码内容。普通请求首次打开就能读到应用、理由、请求有效期和所选 Provider，并能直接批准或拒绝：
 
-Closed as a POC (2026-09-29). The minimal authorization loop is implemented and
-demonstrable; the unchecked roadmap items are optional future extensions, not
-required for the POC. No further development is planned unless the project's
-inputs or goals change.
+- 批准：本地 Relay 收到密文，电脑端解密并打开聊天面板，完成一次回环模拟 Chat Completions 请求。
+- 拒绝：未发送授权，电脑端下一次轮询仍没有结果。
+- 窄屏长内容：详情和展开的模型列表能滚动、没有横向溢出，决定按钮仍可操作。
 
-## Evidence
+[复跑命令与测试说明](../tests/README.md) · [独立复核](review/consent.md) · [协议草案](protocol.md)
 
-- Protocol draft: [`protocol.md`](protocol.md).
-- POC UI: [`../tokenqr.html`](../tokenqr.html) (computer + provider tabs, QR
-  generation and camera scan, P-256 ECDH + HKDF + AES-GCM, policy display) and
-  [`../reverse.html`](../reverse.html) (relay-free reverse authorization).
-- Local Relay: [`../server.py`](../server.py); optional Gateway assets under
-  `../gateway/`.
+## 不在本次验收范围
 
-## Deferred (optional future roadmap)
-
-Public Relay adapter, provider model-list cache/editing, a LiteLLM-style Gateway
-adaptor, and independent protocol implementations with interop tests. These are
-extensions beyond the minimal closed loop.
+主页面的验收入口是粘贴二维码内容，**不支持相机扫码**。本次未验证真实移动设备或其他浏览器、真实帐户与上游、Responses、Anthropic Messages、`reverse.html` 或 Gateway。请求有效期不是原始 Token 的撤销时间，原始 Token 不受界面中的模型、限流或限量设置约束。这是合成数据的本地功能验收，不是安全审计、生产就绪或协议互操作声明。

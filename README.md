@@ -4,13 +4,11 @@
 
 # TokenQR
 
-**项目状态 · 未完成（2026-11-26）**。仓内称最小授权 POC 已关闭；1440×1400 Chromium 中两个独立浏览器上下文跑通真实授权、密文中转及回环模拟上游对话。普通 1280×720 视口的授权确认按钮超出可点击区域。 确认授权弹层在普通桌面和窄屏都能完成全流程，限定到 POC。
+An open, client-first protocol for handing an AI provider token from the user's browser to a local app — by transferring a QR request instead of copy-pasting a secret.
 
-An open, client-first protocol for handing an AI provider token from the user's browser to a local app — by scanning a QR code instead of copy-pasting a secret.
+**TokenQR turns "copy this API key into that app" into a one-time, end-to-end-encrypted authorization the user can review, approve, or decline.**
 
-**TokenQR turns "copy this API key into that app" into a one-time, end-to-end-encrypted authorization the user can see, understand, and limit.**
-
-> **Status: POC closed (2026-09-29).** The minimal authorization loop is implemented and demonstrable. Open roadmap items are optional extensions, not part of the POC. No further development is planned unless the project's inputs or goals change.
+> **Status: Minimal authorization POC complete.** Chromium at 1280×720 and 390×844: generate a QR, paste its contents into the provider page, approve or decline, and after approval make a simulated Chat Completions request from a separate browser context. See [completion record](COMPLETION.md).
 
 ![TokenQR flow: the AI app shows a QR code, the relay forwards ciphertext, the provider confirms and encrypts the token](docs/screenshots/flow.svg)
 
@@ -32,9 +30,9 @@ It is not another token cloud and it does not lock anyone into one vendor. It is
 
 - **Two-sided POC UI** (`tokenqr.html`): a *computer app* tab that requests a token and a *provider* tab that authorizes it.
 - **Multiple provider profiles** kept in the browser's `localStorage`, with `/models` auto-fetch and manual fallback.
-- **One-time QR codes** generated in the browser and scanned with any camera supported by `BarcodeDetector` (or pasted as text).
+- **One-time QR requests** generated in the browser; paste the QR contents into the provider tab. Camera scanning is not implemented on `tokenqr.html`.
 - **End-to-end encryption**: P-256 ECDH key agreement with AES-256-GCM; the QR contains only the relay endpoint, the ephemeral public key, app metadata and an expiry.
-- **Explicit consent screen**: app name, reason, validity, authorized provider, allowed models and displayed rate/quota intent.
+- **Explicit consent screen**: app name, reason, request expiry, selected provider, and what sending the raw token means. API format, model selection and optional Gateway are under advanced settings.
 - **Three API shapes** after authorization: OpenAI Chat Completions, OpenAI Responses, and Anthropic Messages; a minimal chat box sends a request with the authorized credential.
 - **Relay-free reverse mode** (`reverse.html`): the provider encrypts a config with a long memorable password (PBKDF2-SHA-256, 250k iterations, AES-256-GCM), shows a QR (`TQD1`), and the receiver decrypts it locally with the same password.
 - **Local relay** (`server.py`): a standard-library mailbox with `POST` / one-shot `GET` / `DELETE` on `/relay/<id>`, plus CORS.
@@ -56,7 +54,7 @@ Terminal 2 — static pages:
 python3 -m http.server 8080
 ```
 
-Open <http://localhost:8080/tokenqr.html>. Use the **computer app** tab to generate a QR code, then the **provider** tab to scan or paste it, choose a configured provider, and confirm. The relay listens on `http://localhost:8765/relay` by default; the field in the UI is editable.
+Open <http://localhost:8080/tokenqr.html>. In the **computer app** tab, generate a QR code and copy the text below it. In a separate browser window or profile, open the **provider** tab, add a provider, paste the QR text, and click **继续** (Continue). Review the request and click **拒绝** (Decline) or **直接发送原始 Token** (Send raw token). On approval, the computer app opens its chat panel. The relay URL defaults to `http://localhost:8765/relay`; `server.py` listens on all interfaces by default, so only run this quick start on a trusted local machine. For a loopback-only run with synthetic credentials and a fake upstream, use the [acceptance test](tests/README.md).
 
 For the relay-free flow, open <http://localhost:8080/reverse.html>, enter a provider config as JSON in the provider tab, set a long password, and scan the resulting QR in the receiver tab.
 
@@ -77,7 +75,7 @@ docs/
   project-status.md status and evidence
 ```
 
-The flow: the computer app generates an ephemeral P-256 key pair and a random relay endpoint, and puts the public key and metadata into a `TQR1` QR payload. The provider scans it, encrypts the chosen credential to that public key, and `POST`s the ciphertext to the relay endpoint. The computer app polls the same endpoint once, receives the ciphertext, decrypts it locally, and can then call the provider API directly. The relay holds one opaque message and forgets it after the read.
+The flow: the computer app generates an ephemeral P-256 key pair and a random relay endpoint, and puts the public key and metadata into a `TQR1` QR payload. After the user pastes the QR contents and approves, the provider page encrypts the chosen credential to that public key, and `POST`s the ciphertext to the relay endpoint. The computer app polls the same endpoint, receives the ciphertext once, decrypts it locally, and can then call the provider API directly. The relay holds one opaque message and forgets it after the read.
 
 The optional gateway sits between the app and the upstream provider. Instead of handing over the provider's root token, the provider page asks the gateway for a scoped credential; the gateway stores only its hash and enforces the allowlist, expiry and limits on every request.
 
@@ -93,7 +91,7 @@ npm install
 python3 -m py_compile server.py gateway/gateway.py
 ```
 
-There is no test suite or linter configured. Check a change by loading both pages and running the full loop against the local relay; additionally run `git diff --check` and the `node --check` syntax check on any inline script you edit.
+Re-run the [local browser acceptance test](tests/README.md) for the main consent flow. Also run `git diff --check` and use `node --check` on edited inline scripts.
 
 To run the optional gateway:
 
@@ -104,7 +102,7 @@ TOKENQR_ADMIN_TOKEN=... \
 python3 gateway/gateway.py
 ```
 
-It listens on `http://localhost:8787` by default (`TOKENQR_PUBLIC_URL` sets the base URL it hands back, `TOKENQR_DATA` the state file, ignored by git). Configure it in the provider page's optional Gateway field, then choose **Create restricted token** instead of sending the raw token.
+It listens on `http://localhost:8787` by default (`TOKENQR_PUBLIC_URL` sets the base URL it hands back, `TOKENQR_DATA` the state file, ignored by git). Configure it in the optional Gateway field under the consent dialog’s advanced settings, then choose **Create restricted token** instead of sending the raw token.
 
 ## Security boundary
 
